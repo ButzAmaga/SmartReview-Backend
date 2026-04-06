@@ -1,0 +1,88 @@
+# Python
+
+**pycache**/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+
+venv/
+.env/
+.venv/
+
+# Environment variables
+
+.env
+.env.*
+
+# VSCode
+
+.vscode/
+
+# PyCharm
+
+.idea/
+
+# OS files
+
+.DS_Store
+Thumbs.db
+
+# Logs
+
+*.log
+
+# Database files (SQLite)
+
+*.db
+*.sqlite3
+
+# Alembic (keep migrations but ignore cache)
+
+alembic/**pycache**/
+
+# Cache & test artifacts
+
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Distribution / packaging
+
+build/
+dist/
+*.egg-info/
+
+# Mypy / type checking
+
+.mypy_cache/
+.dmypy.json
+
+# Jupyter Notebook
+
+.ipynb_checkpoints/
+
+# Temporary files
+
+*.swp
+*.swo
+*~
+
+# Node (if frontend is added later)
+
+node_modules/
+
+# Static files (optional - if generated)
+
+staticfiles/
+
+# Secrets / keys
+
+*.pem
+*.key
+*.crt
+
+# FastAPI specific
+
+*.env
+
