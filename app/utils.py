@@ -16,10 +16,3 @@ def parse_line(line: str) -> dict | None:
     answer = parts[1].strip()
     return {"question": question, "answer": answer}
 
-async def generate_stream():
-    for line in lines:
-        obj = parse_line(line)
-        if obj:
-            # Send as newline-delimited JSON (NDJSON)
-            yield json.dumps(obj) + "\n"
-            await asyncio.sleep(5)  # simulates model generation delay

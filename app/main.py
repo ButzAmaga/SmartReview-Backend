@@ -6,12 +6,13 @@ import models, schemas, crud
 from database import engine, get_db
 from utils import generate_stream
 from fastapi.middleware.cors import CORSMiddleware
-
+from routes.generate import router as qa_router
+from ml import lifespan
 # Creates all tables on startup
 # models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI()
-
+app = FastAPI(lifespan=lifespan)
+app.include_router(qa_router)
 
 origins = [
     "http://localhost:3000",        # Next.js dev server
@@ -25,13 +26,6 @@ app.add_middleware(
     allow_methods=["*"],            # GET, POST, PUT, DELETE, etc.
     allow_headers=["*"],            # Authorization, Content-Type, etc.
 )
-
-@app.get("/generateQA")
-async def generate_qa():
-    return StreamingResponse(
-        generate_stream(),
-        media_type="application/x-ndjson"  # newline-delimited JSON
-    )
 
 
 

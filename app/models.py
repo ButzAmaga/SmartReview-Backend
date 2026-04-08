@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
 from database import Base
+from sqlalchemy.orm import relationship
 
 class Item(Base):
     __tablename__ = "items"
@@ -15,3 +16,24 @@ class Person(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     age = Column(Integer, nullable=True)
+
+
+
+class Topic(Base):
+    __tablename__ = "topics"
+ 
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False, index=True)
+ 
+    qa_items = relationship("QAItem", back_populates="topic", cascade="all, delete-orphan")
+ 
+ 
+class QAItem(Base):
+    __tablename__ = "qa_items"
+ 
+    id = Column(Integer, primary_key=True, index=True)
+    topic_id = Column(Integer, ForeignKey("topics.id"), nullable=False)
+    question = Column(String, nullable=False)
+    answer = Column(String, nullable=False)
+ 
+    topic = relationship("Topic", back_populates="qa_items")

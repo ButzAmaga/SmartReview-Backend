@@ -24,8 +24,8 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # Direct imports — no 'app.' prefix
 
-from database import Base, DATABASE_URL  # noqa: F401
-import models              # noqa: F401
+from database import Base, DATABASE_URL  
+import models              
 # target_metadata = mymodel.Base.metadata
 
 # ✅ Override alembic.ini URL with the one from your app

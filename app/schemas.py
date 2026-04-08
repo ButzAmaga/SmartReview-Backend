@@ -16,3 +16,6 @@ class ItemResponse(ItemBase):
 
     class Config:
         from_attributes = True  # Lets Pydantic read SQLAlchemy objects
+
+
+# QA Generation
