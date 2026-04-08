@@ -1,10 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
-from fastapi.responses import StreamingResponse
-
-from sqlalchemy.orm import Session
-import models, schemas, crud
-from database import engine, get_db
-from utils import generate_stream
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes.generate import router as qa_router
 from ml import lifespan
