@@ -1,4 +1,4 @@
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_validator,  Field, ConfigDict
 from typing import List, Optional
 
 class QABase(BaseModel):
@@ -19,11 +19,14 @@ class TopicQuestionBase(BaseModel):
 class TopicQuestionCreate(TopicQuestionBase):
     pass
 
-class TopicQuestionResponse(TopicQuestionBase):
+class TopicQuestionResponse(BaseModel):
     id: int
+    topic_name: str = Field(validation_alias="name")
 
-    class Config:
-        from_attributes = True  # Lets Pydantic read SQLAlchemy objects
+
+    model_config = ConfigDict(
+        from_attributes=True
+    )
 
 
 # Shared base — fields used in both create & read

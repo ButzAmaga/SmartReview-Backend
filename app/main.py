@@ -1,12 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes.generate import router as qa_router
-from ml import lifespan
+from app.routes.generate import router as qa_router
+from app.routes.topics import router as topics_router
+from app.ml import lifespan
 # Creates all tables on startup
 # models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(lifespan=lifespan)
+# app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 app.include_router(qa_router)
+app.include_router(topics_router)
 
 origins = [
     "http://localhost:3000",        # Next.js dev server

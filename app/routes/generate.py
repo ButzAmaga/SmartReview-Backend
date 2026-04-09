@@ -1,10 +1,8 @@
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from database import engine, get_db
-from ml import generate_qa
+from app.ml import generate_qa
 import json
-from utils import parse_line
+from app.utils import parse_line
 
 router = APIRouter(
     prefix="/generate",

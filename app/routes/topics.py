@@ -1,8 +1,8 @@
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from backend.app import crud, schemas
-from database import  get_db
+from app import crud, schemas
+from app.database import  get_db
 
 router = APIRouter(
     prefix="/topics",
@@ -12,7 +12,9 @@ router = APIRouter(
 
 @router.post("/saveTopicQuestions/", response_model=schemas.TopicQuestionResponse, status_code=201)
 async def saveTopicQuestions(topicQuestions: schemas.TopicQuestionCreate, db: Session = Depends(get_db)):
-    return crud.createtopicQuestion(db, topicQuestions)
+    data = crud.createtopicQuestion(db, topicQuestions)
+    print("Received topicQuestions:", data)
+    return data
 
 """ 
 @app.post("/items/", response_model=schemas.ItemResponse, status_code=201)
