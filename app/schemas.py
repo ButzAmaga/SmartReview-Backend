@@ -1,4 +1,30 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
+from typing import List, Optional
+
+class QABase(BaseModel):
+    question: str
+    answer: str
+
+class TopicQuestionBase(BaseModel):
+    topic_name: Optional[str] = None
+    topic_id: Optional[int] = None
+    qa: List[QABase]
+
+    @model_validator(mode="after")
+    def check_topic(cls, values):
+        if not values.topic_name and not values.topic_id:
+            raise ValueError("Either topic_name or topic_id must be provided")
+        return values
+
+class TopicQuestionCreate(TopicQuestionBase):
+    pass
+
+class TopicQuestionResponse(TopicQuestionBase):
+    id: int
+
+    class Config:
+        from_attributes = True  # Lets Pydantic read SQLAlchemy objects
+
 
 # Shared base — fields used in both create & read
 class ItemBase(BaseModel):
@@ -19,3 +45,4 @@ class ItemResponse(ItemBase):
 
 
 # QA Generation
+

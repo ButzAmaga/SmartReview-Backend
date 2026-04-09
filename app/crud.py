@@ -1,5 +1,60 @@
 from sqlalchemy.orm import Session
 import models, schemas
+from sqlalchemy import select
+from fastapi import HTTPException
+
+def createtopicQuestion(db: Session, item: schemas.TopicQuestionBase):
+    # 1. Resolve Topic (reuse or create)
+    db_topic = None
+
+    if item.topic_id:
+        db_topic = db.get(models.Topic, item.topic_id)
+        if not db_topic:
+            raise HTTPException(status_code=404, detail="Topic not found")
+
+    elif item.topic_name:
+        # Check if topic already exists (idempotency)
+        db_topic = db.execute(
+            select(models.Topic).where(models.Topic.name == item.topic_name)
+        ).scalar_one_or_none()
+
+        if not db_topic:
+            db_topic = models.Topic(name=item.topic_name)
+            db.add(db_topic)
+            db.flush()  # get id without commit
+
+    else:
+        raise HTTPException(status_code=400, detail="Provide topic_id or topic_name")
+
+    # 2. Get existing questions (avoid duplicates)
+    existing_questions = set(
+        q[0] for q in db.execute(
+            select(models.QAItem.question).where(models.QAItem.topic_id == db_topic.id)
+        ).all()
+    )
+
+    # 3. Prepare new QAItems (bulk + dedup)
+    new_items = [
+        models.QAItem(
+            question=qa.question,
+            answer=qa.answer,
+            topic_id=db_topic.id
+        )
+        for qa in item.qa
+        if qa.question not in existing_questions
+    ]
+
+    # 4. Bulk save (fast)
+    if new_items:
+        db.bulk_save_objects(new_items)
+
+    # 5. Commit once
+    db.commit()
+
+    # 6. Refresh topic with relationships
+    db.refresh(db_topic)
+
+    return db_topic
 
 def get_item(db: Session, item_id: int):
     return db.query(models.Item).filter(models.Item.id == item_id).first()
