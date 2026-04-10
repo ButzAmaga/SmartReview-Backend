@@ -5,6 +5,9 @@ class QABase(BaseModel):
     question: str
     answer: str
 
+class TopicBase(BaseModel):
+    topic_name: str = Field(validation_alias="name")
+
 class TopicQuestionBase(BaseModel):
     topic_name: Optional[str] = None
     topic_id: Optional[int] = None
@@ -19,15 +22,20 @@ class TopicQuestionBase(BaseModel):
 class TopicQuestionCreate(TopicQuestionBase):
     pass
 
+
 class TopicQuestionResponse(BaseModel):
     id: int
     topic_name: str = Field(validation_alias="name")
-
 
     model_config = ConfigDict(
         from_attributes=True
     )
 
+class TopicResponseGet(TopicBase):
+    id: int
+    
+
+    model_config = ConfigDict(from_attributes=True)
 
 # Shared base — fields used in both create & read
 class ItemBase(BaseModel):

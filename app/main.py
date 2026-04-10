@@ -6,8 +6,8 @@ from app.ml import lifespan
 # Creates all tables on startup
 # models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(lifespan=lifespan)
-# app = FastAPI()
+# app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 app.include_router(qa_router)
 app.include_router(topics_router)
 

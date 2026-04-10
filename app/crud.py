@@ -1,7 +1,22 @@
 from sqlalchemy.orm import Session
-from app import models, schemas
+from app import models, schemas, database
 from sqlalchemy import select
 from fastapi import HTTPException
+from typing import Type, TypeVar, Generic, List
+from app.database import Base
+
+### Generic 
+
+# Define a TypeVar that represents any SQLAlchemy model
+T = TypeVar("T", bound=Base) 
+
+class BaseRepository(Generic[T]):
+    def __init__(self, model: Type[T]):
+        self.model = model
+
+    # get items
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int | None = None) -> List[T]:
+        return db.query(self.model).offset(skip).limit(limit).all()
 
 def createtopicQuestion(db: Session, item: schemas.TopicQuestionBase):
     # 1. Resolve Topic (reuse or create)
@@ -56,6 +71,19 @@ def createtopicQuestion(db: Session, item: schemas.TopicQuestionBase):
 
     return db_topic
 
+
+class TopicRepository(BaseRepository[models.Topic]):
+    def __init__(self):
+        super().__init__(models.Topic)
+
+
+# Repository Export
+topic_repo = TopicRepository()
+
+"""
+def get_topics(db: Session, item_id: int):
+    return db.query(models.Item).filter(models.Item.id == item_id).first()
+
 def get_item(db: Session, item_id: int):
     return db.query(models.Item).filter(models.Item.id == item_id).first()
 
@@ -84,3 +112,4 @@ def delete_item(db: Session, item_id: int):
         db.delete(db_item)
         db.commit()
     return db_item
+"""
