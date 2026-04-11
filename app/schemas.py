@@ -1,9 +1,26 @@
 from pydantic import BaseModel, model_validator,  Field, ConfigDict
 from typing import List, Optional
 
+## QUESTION
+
 class QABase(BaseModel):
     question: str
     answer: str
+
+class QAResponseGet(QABase):
+    id: int 
+     # Spaced Repetition / State
+    next_review: int
+    current_step_index: int
+    ease_factor: float
+    interval: int
+    phase: str
+
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
+## TOPIC 
 
 class TopicBase(BaseModel):
     topic_name: str = Field(validation_alias="name")
@@ -37,23 +54,4 @@ class TopicResponseGet(TopicBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-# Shared base — fields used in both create & read
-class ItemBase(BaseModel):
-    name: str
-    description: str | None = None
-    is_active: bool = True
-
-# Used for POST body — no id yet
-class ItemCreate(ItemBase):
-    pass
-
-# Used for responses — includes id from DB
-class ItemResponse(ItemBase):
-    id: int
-
-    class Config:
-        from_attributes = True  # Lets Pydantic read SQLAlchemy objects
-
-
-# QA Generation
 

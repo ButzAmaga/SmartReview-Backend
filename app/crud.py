@@ -14,9 +14,32 @@ class BaseRepository(Generic[T]):
     def __init__(self, model: Type[T]):
         self.model = model
 
-    # get items
-    def get_multi(self, db: Session, *, skip: int = 0, limit: int | None = None) -> List[T]:
-        return db.query(self.model).offset(skip).limit(limit).all()
+    def get_multi(
+        self, 
+        db: Session, 
+        *, 
+        skip: int = 0, 
+        limit: int | None = None, 
+        filters: dict | None = None
+    ) -> List[T]:
+        query = db.query(self.model)
+        
+        if filters:
+            for attr, value in filters.items():
+                # Handle dynamic operators using a __ separator
+                if "__" in attr:
+                    column_name, operator = attr.split("__")
+                    column = getattr(self.model, column_name)
+                    
+                    if operator == "gt": query = query.filter(column > value)
+                    elif operator == "lt": query = query.filter(column < value)
+                    elif operator == "gte": query = query.filter(column >= value)
+                    elif operator == "lte": query = query.filter(column <= value)
+                else:
+                    # Default to equality if no operator is specified
+                    query = query.filter(getattr(self.model, attr) == value)
+                    
+        return query.offset(skip).limit(limit).all()
 
 def createtopicQuestion(db: Session, item: schemas.TopicQuestionBase):
     # 1. Resolve Topic (reuse or create)
@@ -76,9 +99,13 @@ class TopicRepository(BaseRepository[models.Topic]):
     def __init__(self):
         super().__init__(models.Topic)
 
+class QuestionRepository(BaseRepository[models.QAItem]):
+    def __init__(self):
+        super().__init__(models.QAItem)
 
 # Repository Export
 topic_repo = TopicRepository()
+question_repo = QuestionRepository()
 
 """
 def get_topics(db: Session, item_id: int):
