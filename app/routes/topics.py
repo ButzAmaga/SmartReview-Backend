@@ -17,9 +17,4 @@ async def saveTopicQuestions(topicQuestions: schemas.TopicQuestionCreate, db: Se
 def read_topics(skip: int = 0, limit: int | None = None, db: Session = Depends(get_db)):
     return crud.topic_repo.get_multi(db, skip=skip, limit=limit)
 
-"""
-@app.post("/items/", response_model=schemas.ItemResponse, status_code=201)
-def create_item(item: schemas.ItemCreate, db: Session = Depends(get_db)):
-    return crud.create_item(db, item)
-"""
 
