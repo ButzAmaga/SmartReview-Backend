@@ -1,3 +1,4 @@
+from http.client import HTTPException
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app import crud, schemas
@@ -13,3 +14,19 @@ router = APIRouter(
 @router.get("/", response_model=list[schemas.QAResponseGet])
 def get_questions(topic_id:int, skip: int = 0, limit: int | None = None, db: Session = Depends(get_db)):
     return crud.question_repo.get_multi(db, skip=skip, limit=limit, filters={"topic_id":topic_id})
+
+@router.put("/update/qa-items/bulk-afterQuiz", response_model=list[schemas.QAResponseGet])
+def bulk_update_qa_items(
+    items: list[schemas.QAItemUpdate],
+    db: Session = Depends(get_db),
+):
+    if not items:
+        raise HTTPException(status_code=400, detail="No items provided")
+
+    updated = crud.topic_repo.bulk_update_qa_items(db, items)
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="No matching QA items found")
+
+
+    return updated

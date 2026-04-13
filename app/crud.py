@@ -99,6 +99,31 @@ class TopicRepository(BaseRepository[models.Topic]):
     def __init__(self):
         super().__init__(models.Topic)
 
+    def bulk_update_qa_items(self, db: Session, items: list[schemas.QAItemUpdate]) -> list[models.QAItem]:
+        if not items:
+            return []
+
+        # Build a list of dicts for bulk update
+        mappings = [
+            {
+                "id": item.id,
+                "next_review": item.next_review,
+                "current_step_index": item.current_step_index,
+                "ease_factor": item.ease_factor,
+                "interval": item.interval,
+                "phase": item.phase,
+            }
+            for item in items
+        ]
+
+        # Single bulk UPDATE — one round trip
+        db.bulk_update_mappings(models.QAItem, mappings)
+        db.commit()
+
+        # Single SELECT to return updated rows
+        ids = [item.id for item in items]
+        return db.query(models.QAItem).filter(models.QAItem.id.in_(ids)).all()
+
 class QuestionRepository(BaseRepository[models.QAItem]):
     def __init__(self):
         super().__init__(models.QAItem)

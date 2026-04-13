@@ -3,22 +3,23 @@ from typing import List, Optional
 
 ## QUESTION
 
+# Create
 class QABase(BaseModel):
     question: str
     answer: str
 
-class QAResponseGet(QABase):
-    id: int 
-     # Spaced Repetition / State
+# Update
+class QAItemUpdate(BaseModel):
+    id: int
     next_review: int
     current_step_index: int
     ease_factor: float
     interval: int
     phase: str
 
-    model_config = ConfigDict(
-        from_attributes=True
-    )
+# Get Question
+class QAResponseGet(QABase, QAItemUpdate):
+    model_config = ConfigDict(from_attributes=True)
 
 ## TOPIC 
 
