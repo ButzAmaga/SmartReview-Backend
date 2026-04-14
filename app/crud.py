@@ -2,44 +2,136 @@ from sqlalchemy.orm import Session
 from app import models, schemas, database
 from sqlalchemy import select
 from fastapi import HTTPException
-from typing import Type, TypeVar, Generic, List
+from typing import Type, TypeVar, Generic, List, Never
 from app.database import Base
 
 ### Generic 
 
 # Define a TypeVar that represents any SQLAlchemy model
-T = TypeVar("T", bound=Base) 
+from typing import Generic, TypeVar, Type
+from pydantic import BaseModel
 
-class BaseRepository(Generic[T]):
+T = TypeVar("T")
+CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
+UpdateSchemaType = TypeVar("UpdateSchemaType", bound=BaseModel)
+
+class BaseRepository(Generic[T, CreateSchemaType, UpdateSchemaType]):
     def __init__(self, model: Type[T]):
         self.model = model
 
+    def get(self, db: Session, id: int) -> T | None:
+        return db.query(self.model).filter(self.model.id == id).first()
+
     def get_multi(
-        self, 
-        db: Session, 
-        *, 
-        skip: int = 0, 
-        limit: int | None = None, 
-        filters: dict | None = None
-    ) -> List[T]:
+        self,
+        db: Session,
+        *,
+        skip: int = 0,
+        limit: int | None = None,
+        filters: dict | None = None,
+    ) -> list[T]:
         query = db.query(self.model)
-        
+
         if filters:
             for attr, value in filters.items():
-                # Handle dynamic operators using a __ separator
                 if "__" in attr:
                     column_name, operator = attr.split("__")
                     column = getattr(self.model, column_name)
-                    
-                    if operator == "gt": query = query.filter(column > value)
-                    elif operator == "lt": query = query.filter(column < value)
+
+                    if operator == "gt":    query = query.filter(column > value)
+                    elif operator == "lt":  query = query.filter(column < value)
                     elif operator == "gte": query = query.filter(column >= value)
                     elif operator == "lte": query = query.filter(column <= value)
                 else:
-                    # Default to equality if no operator is specified
                     query = query.filter(getattr(self.model, attr) == value)
-                    
+
         return query.offset(skip).limit(limit).all()
+
+    def create(self, db: Session, obj_in: CreateSchemaType) -> T:
+        obj = self.model(**obj_in.model_dump())
+        db.add(obj)
+        db.commit()
+        db.refresh(obj)
+        return obj
+
+    def update(self, db: Session, id: int, obj_in: UpdateSchemaType) -> T | None:
+        obj = self.get(db, id)
+        if not obj:
+            return None
+
+        for field, value in obj_in.model_dump(exclude_unset=True).items():
+            setattr(obj, field, value)
+
+        db.commit()
+        db.refresh(obj)
+        return obj
+
+    def delete(self, db: Session, id: int) -> T | None:
+        obj = self.get(db, id)
+        if not obj:
+            return None
+
+        db.delete(obj)
+        db.commit()
+        return obj
+    def __init__(self, model: Type[T]):
+        self.model = model
+
+    def get(self, db: Session, id: int) -> T | None:
+        return db.query(self.model).filter(self.model.id == id).first()
+
+    def get_multi(
+        self,
+        db: Session,
+        *,
+        skip: int = 0,
+        limit: int | None = None,
+        filters: dict | None = None,
+    ) -> list[T]:
+        query = db.query(self.model)
+
+        if filters:
+            for attr, value in filters.items():
+                if "__" in attr:
+                    column_name, operator = attr.split("__")
+                    column = getattr(self.model, column_name)
+
+                    if operator == "gt":    query = query.filter(column > value)
+                    elif operator == "lt":  query = query.filter(column < value)
+                    elif operator == "gte": query = query.filter(column >= value)
+                    elif operator == "lte": query = query.filter(column <= value)
+                else:
+                    query = query.filter(getattr(self.model, attr) == value)
+
+        return query.offset(skip).limit(limit).all()
+
+    def create(self, db: Session, obj_in: T) -> T:
+        obj = self.model(**obj_in.model_dump())
+        db.add(obj)
+        db.commit()
+        db.refresh(obj)
+        return obj
+
+    def update(self, db: Session, id: int, obj_in: T) -> T | None:
+        obj = self.get(db, id)
+        if not obj:
+            return None
+
+        for field, value in obj_in.model_dump(exclude_unset=True).items():
+            setattr(obj, field, value)
+
+        db.commit()
+        db.refresh(obj)
+        return obj
+
+    def delete(self, db: Session, id: int) -> T | None:
+        obj = self.get(db, id)
+        if not obj:
+            return None
+
+        db.delete(obj)
+        db.commit()
+        return obj
 
 def createtopicQuestion(db: Session, item: schemas.TopicQuestionBase):
     # 1. Resolve Topic (reuse or create)
@@ -95,10 +187,20 @@ def createtopicQuestion(db: Session, item: schemas.TopicQuestionBase):
     return db_topic
 
 
-class TopicRepository(BaseRepository[models.Topic]):
+class TopicRepository(BaseRepository[models.Topic, Never, Never]):
     def __init__(self):
         super().__init__(models.Topic)
 
+    def update(self, *args, **kwargs) -> Never:
+        raise NotImplementedError("Not Implemented")
+
+    def delete(self, *args, **kwargs) -> Never:
+        raise NotImplementedError("Not Implemented")
+
+
+class QuestionRepository(BaseRepository[models.QAItem, Never, Never]):
+    def __init__(self):
+        super().__init__(models.QAItem)
     def bulk_update_qa_items(self, db: Session, items: list[schemas.QAItemUpdate]) -> list[models.QAItem]:
         if not items:
             return []
@@ -123,10 +225,12 @@ class TopicRepository(BaseRepository[models.Topic]):
         # Single SELECT to return updated rows
         ids = [item.id for item in items]
         return db.query(models.QAItem).filter(models.QAItem.id.in_(ids)).all()
+    
+    def update(self, *args, **kwargs) -> Never:
+        raise NotImplementedError("Not Implemented")
 
-class QuestionRepository(BaseRepository[models.QAItem]):
-    def __init__(self):
-        super().__init__(models.QAItem)
+    def delete(self, *args, **kwargs) -> Never:
+        raise NotImplementedError("Not Implemented")
 
 # Repository Export
 topic_repo = TopicRepository()

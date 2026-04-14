@@ -23,7 +23,7 @@ def bulk_update_qa_items(
     if not items:
         raise HTTPException(status_code=400, detail="No items provided")
 
-    updated = crud.topic_repo.bulk_update_qa_items(db, items)
+    updated = crud.question_repo.bulk_update_qa_items(db, items)
 
     if not updated:
         raise HTTPException(status_code=404, detail="No matching QA items found")
