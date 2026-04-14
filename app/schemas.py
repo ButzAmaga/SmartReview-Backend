@@ -25,8 +25,17 @@ class QADeleteRequest():
 class QADeleteResponse(QACreateResponse):
     pass
 
-
 # Update
+
+class QAUpdateRequest(QABase):
+    pass
+
+class QAUpdateResponse(QABase):
+    id:int
+    model_config = ConfigDict(from_attributes=True)
+    pass
+
+# Bulk Update 
 class QAItemUpdate(BaseModel):
     id: int
     next_review: int

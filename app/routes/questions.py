@@ -32,6 +32,14 @@ def delete_item(question_id: int, db: Session = Depends(get_db)):
 def get_questions_deckcard(topic_id:int, skip: int = 0, limit: int | None = None, db: Session = Depends(get_db)):
     return crud.question_repo.get_multi(db, skip=skip, limit=limit, filters={"topic_id":topic_id})
 
+
+@router.put("/question/{question_id}", response_model=schemas.QAUpdateResponse)
+def update_item(question_id: int, item: schemas.QAUpdateRequest, db: Session = Depends(get_db)):
+    updated = crud.question_repo.update(db, question_id, item)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return updated
+
 @router.put("/update/qa-items/bulk-afterQuiz", response_model=list[schemas.QAResponseGet])
 def bulk_update_qa_items(
     items: list[schemas.QAItemUpdate],

@@ -202,7 +202,7 @@ class TopicRepository(BaseRepository[models.Topic, Never, Never]):
         raise NotImplementedError("Not Implemented")
 
 
-class QuestionRepository(BaseRepository[models.QAItem, schemas.QACreateResponse, Never]):
+class QuestionRepository(BaseRepository[models.QAItem, schemas.QACreateResponse, schemas.QAUpdateRequest]):
     def __init__(self):
         super().__init__(models.QAItem)
 
@@ -231,8 +231,6 @@ class QuestionRepository(BaseRepository[models.QAItem, schemas.QACreateResponse,
         ids = [item.id for item in items]
         return db.query(models.QAItem).filter(models.QAItem.id.in_(ids)).all()
     
-    def update(self, *args, **kwargs) -> Never:
-        raise NotImplementedError("Not Implemented")
 
 
 # Repository Export
