@@ -15,6 +15,10 @@ router = APIRouter(
 def get_questions(topic_id:int, skip: int = 0, limit: int | None = None, db: Session = Depends(get_db)):
     return crud.question_repo.get_multi(db, skip=skip, limit=limit, filters={"topic_id":topic_id})
 
+@router.get("/get-deck-card-questions", response_model=list[schemas.QAResponseDeckCardGet])
+def get_questions_deckcard(topic_id:int, skip: int = 0, limit: int | None = None, db: Session = Depends(get_db)):
+    return crud.question_repo.get_multi(db, skip=skip, limit=limit, filters={"topic_id":topic_id})
+
 @router.put("/update/qa-items/bulk-afterQuiz", response_model=list[schemas.QAResponseGet])
 def bulk_update_qa_items(
     items: list[schemas.QAItemUpdate],

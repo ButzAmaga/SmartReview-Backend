@@ -21,6 +21,12 @@ class QAItemUpdate(BaseModel):
 class QAResponseGet(QABase, QAItemUpdate):
     model_config = ConfigDict(from_attributes=True)
 
+# Get question for deck card
+class QAResponseDeckCardGet(QABase):
+    id: int
+    next_review: int
+    model_config = ConfigDict(from_attributes=True)
+
 ## TOPIC 
 
 class TopicBase(BaseModel):
