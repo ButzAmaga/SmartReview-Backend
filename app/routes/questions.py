@@ -20,6 +20,14 @@ def get_questions(topic_id:int, skip: int = 0, limit: int | None = None, db: Ses
 async def createQuestion(question: schemas.QACreateRequest, db: Session = Depends(get_db)):
     return crud.question_repo.create(db, question)
 
+@router.delete("/question/{question_id}", status_code=204)
+def delete_item(question_id: int, db: Session = Depends(get_db)):
+    deleted = crud.question_repo.delete(db, question_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+
+
 @router.get("/get-deck-card-questions", response_model=list[schemas.QAResponseDeckCardGet])
 def get_questions_deckcard(topic_id:int, skip: int = 0, limit: int | None = None, db: Session = Depends(get_db)):
     return crud.question_repo.get_multi(db, skip=skip, limit=limit, filters={"topic_id":topic_id})
@@ -39,3 +47,4 @@ def bulk_update_qa_items(
 
 
     return updated
+

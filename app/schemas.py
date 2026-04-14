@@ -18,6 +18,13 @@ class QACreateResponse(QABase):
     topic_id:int
     model_config = ConfigDict(from_attributes=True)
 
+# Delete
+class QADeleteRequest():
+    id:int
+
+class QADeleteResponse(QACreateResponse):
+    pass
+
 
 # Update
 class QAItemUpdate(BaseModel):

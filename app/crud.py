@@ -77,6 +77,7 @@ class BaseRepository(Generic[T, CreateSchemaType, UpdateSchemaType]):
         db.delete(obj)
         db.commit()
         return obj
+    
     def __init__(self, model: Type[T]):
         self.model = model
 
@@ -201,10 +202,10 @@ class TopicRepository(BaseRepository[models.Topic, Never, Never]):
         raise NotImplementedError("Not Implemented")
 
 
-class QuestionRepository(BaseRepository[models.QAItem, Never, Never]):
+class QuestionRepository(BaseRepository[models.QAItem, schemas.QACreateResponse, Never]):
     def __init__(self):
         super().__init__(models.QAItem)
-        
+
     def bulk_update_qa_items(self, db: Session, items: list[schemas.QAItemUpdate]) -> list[models.QAItem]:
         if not items:
             return []
@@ -233,8 +234,6 @@ class QuestionRepository(BaseRepository[models.QAItem, Never, Never]):
     def update(self, *args, **kwargs) -> Never:
         raise NotImplementedError("Not Implemented")
 
-    def delete(self, *args, **kwargs) -> Never:
-        raise NotImplementedError("Not Implemented")
 
 # Repository Export
 topic_repo = TopicRepository()
