@@ -10,10 +10,15 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-
+# getting the topic questions for the quiz
 @router.get("/", response_model=list[schemas.QAResponseGet])
 def get_questions(topic_id:int, skip: int = 0, limit: int | None = None, db: Session = Depends(get_db)):
     return crud.question_repo.get_multi(db, skip=skip, limit=limit, filters={"topic_id":topic_id})
+
+
+@router.post("/create", response_model=schemas.QACreateResponse, status_code=201)
+async def createQuestion(question: schemas.QACreateRequest, db: Session = Depends(get_db)):
+    return crud.question_repo.create(db, question)
 
 @router.get("/get-deck-card-questions", response_model=list[schemas.QAResponseDeckCardGet])
 def get_questions_deckcard(topic_id:int, skip: int = 0, limit: int | None = None, db: Session = Depends(get_db)):

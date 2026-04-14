@@ -15,6 +15,9 @@ T = TypeVar("T")
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
 UpdateSchemaType = TypeVar("UpdateSchemaType", bound=BaseModel)
 
+# T is for model
+# CreateSchemaType of create input type
+# UpdateSchemaType for update input type
 class BaseRepository(Generic[T, CreateSchemaType, UpdateSchemaType]):
     def __init__(self, model: Type[T]):
         self.model = model
@@ -201,6 +204,7 @@ class TopicRepository(BaseRepository[models.Topic, Never, Never]):
 class QuestionRepository(BaseRepository[models.QAItem, Never, Never]):
     def __init__(self):
         super().__init__(models.QAItem)
+        
     def bulk_update_qa_items(self, db: Session, items: list[schemas.QAItemUpdate]) -> list[models.QAItem]:
         if not items:
             return []

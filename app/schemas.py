@@ -3,10 +3,21 @@ from typing import List, Optional
 
 ## QUESTION
 
-# Create
+# Base
 class QABase(BaseModel):
     question: str
     answer: str
+
+# Create
+
+class QACreateRequest(QABase):
+    topic_id:int
+
+class QACreateResponse(QABase):
+    id:int
+    topic_id:int
+    model_config = ConfigDict(from_attributes=True)
+
 
 # Update
 class QAItemUpdate(BaseModel):
