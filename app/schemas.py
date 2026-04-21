@@ -44,6 +44,10 @@ class QAItemUpdate(BaseModel):
     interval: int
     phase: str
 
+class QAItemUpdateAdvanceRequest(BaseModel):
+    id: int
+    next_review: int
+
 # Get Question
 class QAResponseGet(QABase, QAItemUpdate):
     model_config = ConfigDict(from_attributes=True)

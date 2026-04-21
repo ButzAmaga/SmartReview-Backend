@@ -195,13 +195,6 @@ class TopicRepository(BaseRepository[models.Topic, Never, Never]):
     def __init__(self):
         super().__init__(models.Topic)
 
-    def update(self, *args, **kwargs) -> Never:
-        raise NotImplementedError("Not Implemented")
-
-    def delete(self, *args, **kwargs) -> Never:
-        raise NotImplementedError("Not Implemented")
-
-
 class QuestionRepository(BaseRepository[models.QAItem, schemas.QACreateResponse, schemas.QAUpdateRequest]):
     def __init__(self):
         super().__init__(models.QAItem)
@@ -230,7 +223,27 @@ class QuestionRepository(BaseRepository[models.QAItem, schemas.QACreateResponse,
         # Single SELECT to return updated rows
         ids = [item.id for item in items]
         return db.query(models.QAItem).filter(models.QAItem.id.in_(ids)).all()
-    
+
+    def bulk_update_qa_items_advance(self, db: Session, items: list[schemas.QAItemUpdateAdvanceRequest]) -> list[models.QAItem]:
+        if not items:
+            return []
+
+        # Build a list of dicts for bulk update
+        mappings = [
+            {
+                "id": item.id,
+                "next_review": item.next_review,
+            }
+            for item in items
+        ]
+
+        # Single bulk UPDATE — one round trip
+        db.bulk_update_mappings(models.QAItem, mappings)
+        db.commit()
+
+        # Single SELECT to return updated rows
+        ids = [item.id for item in items]
+        return db.query(models.QAItem).filter(models.QAItem.id.in_(ids)).all()
 
 
 # Repository Export

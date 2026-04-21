@@ -27,7 +27,6 @@ def delete_item(question_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Item not found")
 
 
-
 @router.get("/get-deck-card-questions", response_model=list[schemas.QAResponseDeckCardGet])
 def get_questions_deckcard(topic_id:int, skip: int = 0, limit: int | None = None, db: Session = Depends(get_db)):
     return crud.question_repo.get_multi(db, skip=skip, limit=limit, filters={"topic_id":topic_id})
@@ -53,6 +52,19 @@ def bulk_update_qa_items(
     if not updated:
         raise HTTPException(status_code=404, detail="No matching QA items found")
 
-
     return updated
 
+@router.put("/update/qa-items/bulk-advance", response_model=list[schemas.QAResponseGet])
+def bulk_update_qa_items_advance(
+    items: list[schemas.QAItemUpdateAdvanceRequest],
+    db: Session = Depends(get_db),
+):
+    if not items:
+        raise HTTPException(status_code=400, detail="No items provided")
+
+    updated = crud.question_repo.bulk_update_qa_items_advance(db, items)
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="No matching QA items found")
+
+    return updated

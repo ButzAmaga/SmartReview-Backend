@@ -17,4 +17,8 @@ async def saveTopicQuestions(topicQuestions: schemas.TopicQuestionCreate, db: Se
 def read_topics(skip: int = 0, limit: int | None = None, db: Session = Depends(get_db)):
     return crud.topic_repo.get_multi(db, skip=skip, limit=limit)
 
-
+@router.delete("/topic/{topic_id}", status_code=204)
+def delete_item(topic_id: int, db: Session = Depends(get_db)):
+    deleted = crud.topic_repo.delete(db, topic_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Item not found")
