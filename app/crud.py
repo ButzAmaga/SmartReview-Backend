@@ -1,9 +1,10 @@
 from sqlalchemy.orm import Session
 from app import models, schemas, database
-from sqlalchemy import select
+from sqlalchemy import select, func
 from fastapi import HTTPException
 from typing import Type, TypeVar, Generic, List, Never
 from app.database import Base
+import time
 
 ### Generic 
 
@@ -194,6 +195,28 @@ def createtopicQuestion(db: Session, item: schemas.TopicQuestionBase):
 class TopicRepository(BaseRepository[models.Topic, Never, Never]):
     def __init__(self):
         super().__init__(models.Topic)
+
+    def get_topics_with_counts(self, db: Session, skip: int = 0, limit: int | None = None):
+        now = int(time.time())
+        
+        # Query Topic and the count of related QAItems due for review
+        results = (
+            db.query(
+                self.model, 
+                func.count(models.QAItem.id).label("number_of_questions")
+            )
+            .outerjoin(models.QAItem, (self.model.id == models.QAItem.topic_id) & (models.QAItem.next_review <= now))
+            .group_by(self.model.id)
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+        
+        # Merge the count into the Topic object's attributes for the schema
+        for topic, count in results:
+            topic.number_of_questions = count
+            
+        return [r[0] for r in results]
 
 class QuestionRepository(BaseRepository[models.QAItem, schemas.QACreateResponse, schemas.QAUpdateRequest]):
     def __init__(self):

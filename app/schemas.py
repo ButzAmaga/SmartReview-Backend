@@ -92,4 +92,10 @@ class TopicResponseGet(TopicBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class TopicWithQuestionCountResponseGet(TopicBase):
+    
+    id: int
+    number_of_questions: int # New field
 
+    class Config:
+        from_attributes = True # Allows Pydantic to read the added attribute
