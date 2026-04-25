@@ -99,3 +99,15 @@ class TopicWithQuestionCountResponseGet(TopicBase):
 
     class Config:
         from_attributes = True # Allows Pydantic to read the added attribute
+
+class QA_items_instance(BaseModel):
+    id:int
+    next_review:int
+
+class TopicWithQuestionResponseGet(TopicBase):
+
+    id: int
+    qa_items: list[QA_items_instance]
+
+    class Config:
+        from_attributes = True # Allows Pydantic to read the added attribute

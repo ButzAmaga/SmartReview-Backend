@@ -13,9 +13,9 @@ router = APIRouter(
 async def saveTopicQuestions(topicQuestions: schemas.TopicQuestionCreate, db: Session = Depends(get_db)):
     return crud.createtopicQuestion(db, topicQuestions)
 
-@router.get("/", response_model=list[schemas.TopicWithQuestionCountResponseGet])
+@router.get("/", response_model=list[schemas.TopicWithQuestionResponseGet])
 def read_topics(skip: int = 0, limit: int | None = None, db: Session = Depends(get_db)):
-    return crud.topic_repo.get_topics_with_counts(db, skip=skip, limit=limit)
+    return crud.topic_repo.get_topics_with_all_questions(db, skip=skip, limit=limit)
 
 @router.delete("/topic/{topic_id}", status_code=204)
 def delete_item(topic_id: int, db: Session = Depends(get_db)):

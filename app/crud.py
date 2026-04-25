@@ -1,10 +1,11 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app import models, schemas, database
 from sqlalchemy import select, func
 from fastapi import HTTPException
 from typing import Type, TypeVar, Generic, List, Never
 from app.database import Base
 import time
+from datetime import datetime, time, timezone
 
 ### Generic 
 
@@ -197,7 +198,14 @@ class TopicRepository(BaseRepository[models.Topic, Never, Never]):
         super().__init__(models.Topic)
 
     def get_topics_with_counts(self, db: Session, skip: int = 0, limit: int | None = None):
-        now = int(time.time())
+        # 1. Get the current date and time
+        current_time = datetime.now(timezone.utc)
+
+        # 2. Reset time components to 00:00:00
+        midnight = datetime.combine(current_time.date(), time.min, tzinfo=timezone.utc)
+
+        # 3. Convert back to integer timestamp
+        now = int(midnight.timestamp())
         
         # Query Topic and the count of related QAItems due for review
         results = (
@@ -217,6 +225,20 @@ class TopicRepository(BaseRepository[models.Topic, Never, Never]):
             topic.number_of_questions = count
             
         return [r[0] for r in results]
+
+    def get_topics_with_all_questions(self, db: Session, skip: int = 0, limit: int | None = None):
+        # Create a statement
+        stmt = (
+            select(self.model)
+            .options(joinedload(self.model.qa_items))
+            .offset(skip)
+            .limit(limit)
+        )
+        
+        # Execute, apply unique, and get scalars (the objects)
+        result = db.execute(stmt)
+        return result.unique().scalars().all()
+    
 
 class QuestionRepository(BaseRepository[models.QAItem, schemas.QACreateResponse, schemas.QAUpdateRequest]):
     def __init__(self):

@@ -1,6 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Float
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Float, DateTime, func
 from app.database import Base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+from datetime import datetime
+from typing import Optional
 
 class Item(Base):
     __tablename__ = "items"
@@ -24,6 +26,9 @@ class Topic(Base):
  
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False, index=True)
+
+    # meta data
+
  
     qa_items = relationship("QAItem", back_populates="topic", cascade="all, delete-orphan")
  
@@ -44,3 +49,26 @@ class QAItem(Base):
     phase = Column(String, nullable=False, default="new") 
 
     topic = relationship("Topic", back_populates="qa_items")
+
+# v2.0 
+class ReviewSession(Base):
+    __tablename__ = "review_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    # Timestamps
+    start_review: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    end_review: Mapped[Optional[datetime]] = mapped_column(DateTime)
+
+    # Session Stats (Snapshots)
+    graduated_cards: Mapped[int] = mapped_column(Integer, default=0)
+    learning_cards: Mapped[int] = mapped_column(Integer, default=0)
+    relearning_cards: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Derived Attribute: Duration (Calculated on the fly)
+    @property
+    def duration_minutes(self) -> float:
+        if self.start_review and self.end_review:
+            delta = self.end_review - self.start_review
+            return round(delta.total_seconds() / 60, 2)
+        return 0.0    
