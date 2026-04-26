@@ -80,57 +80,7 @@ class BaseRepository(Generic[T, CreateSchemaType, UpdateSchemaType]):
         db.commit()
         return obj
     
-    def __init__(self, model: Type[T]):
-        self.model = model
-
-    def get(self, db: Session, id: int) -> T | None:
-        return db.query(self.model).filter(self.model.id == id).first()
-
-    def get_multi(
-        self,
-        db: Session,
-        *,
-        skip: int = 0,
-        limit: int | None = None,
-        filters: dict | None = None,
-    ) -> list[T]:
-        query = db.query(self.model)
-
-        if filters:
-            for attr, value in filters.items():
-                if "__" in attr:
-                    column_name, operator = attr.split("__")
-                    column = getattr(self.model, column_name)
-
-                    if operator == "gt":    query = query.filter(column > value)
-                    elif operator == "lt":  query = query.filter(column < value)
-                    elif operator == "gte": query = query.filter(column >= value)
-                    elif operator == "lte": query = query.filter(column <= value)
-                else:
-                    query = query.filter(getattr(self.model, attr) == value)
-
-        return query.offset(skip).limit(limit).all()
-
-    def create(self, db: Session, obj_in: T) -> T:
-        obj = self.model(**obj_in.model_dump())
-        db.add(obj)
-        db.commit()
-        db.refresh(obj)
-        return obj
-
-    def update(self, db: Session, id: int, obj_in: T) -> T | None:
-        obj = self.get(db, id)
-        if not obj:
-            return None
-
-        for field, value in obj_in.model_dump(exclude_unset=True).items():
-            setattr(obj, field, value)
-
-        db.commit()
-        db.refresh(obj)
-        return obj
-
-    def delete(self, db: Session, id: int) -> T | None:
+   
         obj = self.get(db, id)
         if not obj:
             return None
@@ -290,10 +240,28 @@ class QuestionRepository(BaseRepository[models.QAItem, schemas.QACreateResponse,
         ids = [item.id for item in items]
         return db.query(models.QAItem).filter(models.QAItem.id.in_(ids)).all()
 
+class ReviewSessionRepository(BaseRepository[models.ReviewSession, schemas.ReviewSessionRequest, Never]):
+    def __init__(self):
+        super().__init__(models.ReviewSession)
+
+    def create(self, db: Session, obj_in: CreateSchemaType) -> T:
+        # 1. Create an empty instance of the model
+        obj = self.model()
+        
+        # 2. Use setattr for each field (this triggers @property.setter) (the default repository create sees _review but not the getter so it is needed to do manually)
+        for field, value in obj_in.model_dump().items():
+            setattr(obj, field, value)
+            
+        db.add(obj)
+        db.commit()
+        db.refresh(obj)
+        return obj    
+    
 
 # Repository Export
 topic_repo = TopicRepository()
 question_repo = QuestionRepository()
+reviewSession_repo = ReviewSessionRepository()
 
 """
 def get_topics(db: Session, item_id: int):

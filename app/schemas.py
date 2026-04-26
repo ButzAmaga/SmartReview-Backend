@@ -111,3 +111,27 @@ class TopicWithQuestionResponseGet(TopicBase):
 
     class Config:
         from_attributes = True # Allows Pydantic to read the added attribute
+
+
+# LOGS
+
+class ReviewSessionRequest(BaseModel):
+    
+    # These match your hybrid_property names exactly.
+    # Pydantic will accept ISO strings and your SQLAlchemy 
+    # setter will convert them to datetime objects automatically.
+    start_review: str 
+    end_review: str
+
+    # Snapshot stats
+    graduated_cards: int = 0
+    learning_cards: int = 0
+    relearning_cards: int = 0
+    new_cards: int = 0
+
+class ReviewSessionResponse(ReviewSessionRequest):
+    id: int
+    duration_minutes: float
+    
+    # Pydantic v2 uses model_config instead of class Config
+    model_config = ConfigDict(from_attributes=True)    

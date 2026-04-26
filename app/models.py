@@ -3,6 +3,8 @@ from app.database import Base
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from datetime import datetime
 from typing import Optional
+from sqlalchemy.ext.hybrid import hybrid_property
+
 
 class Item(Base):
     __tablename__ = "items"
@@ -50,25 +52,53 @@ class QAItem(Base):
 
     topic = relationship("Topic", back_populates="qa_items")
 
-# v2.0 
+
+
 class ReviewSession(Base):
     __tablename__ = "review_sessions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     
-    # Timestamps
-    start_review: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    end_review: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    # Storage columns
+    _start_review: Mapped[datetime] = mapped_column(
+        "start_review", DateTime, server_default=func.now()
+    )
+    _end_review: Mapped[datetime] = mapped_column(
+        "end_review", DateTime
+    )
 
-    # Session Stats (Snapshots)
+    @hybrid_property
+    def start_review(self) -> str:
+        return self._start_review.isoformat() if self._start_review else None
+
+    @start_review.setter
+    def start_review(self, iso_str: str):
+        if iso_str:
+            # Python 3.11 handles "Z" and offsets automatically
+            self._start_review = datetime.fromisoformat(iso_str)
+
+    @hybrid_property
+    def end_review(self) -> str:
+        return self._end_review.isoformat() if self._end_review else None
+
+    @end_review.setter
+    def end_review(self, iso_str: Optional[str]):
+        if iso_str:
+            self._end_review = datetime.fromisoformat(iso_str)
+        else:
+            self._end_review = None
+
+    # Session Stats
     graduated_cards: Mapped[int] = mapped_column(Integer, default=0)
     learning_cards: Mapped[int] = mapped_column(Integer, default=0)
     relearning_cards: Mapped[int] = mapped_column(Integer, default=0)
+    new_cards: Mapped[int] = mapped_column(Integer, default=0)
 
-    # Derived Attribute: Duration (Calculated on the fly)
     @property
     def duration_minutes(self) -> float:
-        if self.start_review and self.end_review:
-            delta = self.end_review - self.start_review
+        # Reference the internal datetime objects for calculation
+        if self._start_review and self._end_review:
+            delta = self._end_review - self._start_review
             return round(delta.total_seconds() / 60, 2)
-        return 0.0    
+        return 0.0
+ 
