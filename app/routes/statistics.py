@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select, cast, Date, desc
 from sqlalchemy.orm import Session # Use standard Session
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Annotated, Dict
 from app.database import  Base, get_db
 from app.models import ReviewSession, Topic
@@ -19,7 +19,7 @@ def _end_of_day(d: date) -> datetime:
     return datetime.combine(d, time.max)
 
 def get_daily_stats(db: Session) -> DailyStatsResponse:
-    today = date.today()
+    today = datetime.now(timezone.utc).date()
     day_start = _start_of_day(today)
     day_end = _end_of_day(today)
 
@@ -76,7 +76,7 @@ def daily_stats(db: Annotated[Session, Depends(get_db)]):
 
 @router.get("/daily/part_2", response_model=DailyReviewResponse)
 def get_today_review_summary(db: Session = Depends(get_db)):
-    today = date.today()
+    today = datetime.now(timezone.utc).date()
 
     # Step 1 — Cast start_review to Date for filtering (SQLite datetime strings
     # func.date() extracts the date portion from SQLite's datetime string

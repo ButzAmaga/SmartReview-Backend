@@ -69,8 +69,8 @@ class ReviewSession(Base):
     topic: Mapped["Topic"] = relationship(back_populates="review_sessions")
     
     # Storage columns
-    start_review: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    end_review: Mapped[datetime] = mapped_column(DateTime)
+    start_review: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    end_review: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     # Session Stats
     graduated_cards: Mapped[int] = mapped_column(Integer, default=0)
