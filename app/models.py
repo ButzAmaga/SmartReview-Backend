@@ -29,9 +29,12 @@ class Topic(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False, index=True)
 
-    # meta data
+    # Add this to link back to ReviewSession
+    review_sessions: Mapped[list["ReviewSession"]] = relationship(
+        "ReviewSession", back_populates="topic", cascade="all, delete-orphan"
+    )
 
- 
+
     qa_items = relationship("QAItem", back_populates="topic", cascade="all, delete-orphan")
  
  
@@ -58,35 +61,16 @@ class ReviewSession(Base):
     __tablename__ = "review_sessions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+
+    # 1. Add the Foreign Key column
+    topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id"), server_default="1" )
+
+    # 2. Add the relationship to Topic
+    topic: Mapped["Topic"] = relationship(back_populates="review_sessions")
     
     # Storage columns
-    _start_review: Mapped[datetime] = mapped_column(
-        "start_review", DateTime, server_default=func.now()
-    )
-    _end_review: Mapped[datetime] = mapped_column(
-        "end_review", DateTime
-    )
-
-    @hybrid_property
-    def start_review(self) -> str:
-        return self._start_review.isoformat() if self._start_review else None
-
-    @start_review.setter
-    def start_review(self, iso_str: str):
-        if iso_str:
-            # Python 3.11 handles "Z" and offsets automatically
-            self._start_review = datetime.fromisoformat(iso_str)
-
-    @hybrid_property
-    def end_review(self) -> str:
-        return self._end_review.isoformat() if self._end_review else None
-
-    @end_review.setter
-    def end_review(self, iso_str: Optional[str]):
-        if iso_str:
-            self._end_review = datetime.fromisoformat(iso_str)
-        else:
-            self._end_review = None
+    start_review: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    end_review: Mapped[datetime] = mapped_column(DateTime)
 
     # Session Stats
     graduated_cards: Mapped[int] = mapped_column(Integer, default=0)
@@ -94,12 +78,4 @@ class ReviewSession(Base):
     relearning_cards: Mapped[int] = mapped_column(Integer, default=0)
     new_cards: Mapped[int] = mapped_column(Integer, default=0)
     review_cards: Mapped[int] = mapped_column(Integer, default=0)
-
-    @property
-    def duration_minutes(self) -> float:
-        # Reference the internal datetime objects for calculation
-        if self._start_review and self._end_review:
-            delta = self._end_review - self._start_review
-            return round(delta.total_seconds() / 60, 2)
-        return 0.0
  

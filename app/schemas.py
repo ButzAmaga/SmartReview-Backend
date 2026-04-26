@@ -1,5 +1,6 @@
-from pydantic import BaseModel, model_validator,  Field, ConfigDict
+from pydantic import BaseModel, model_validator,  Field, ConfigDict, computed_field
 from typing import List, Optional
+from datetime import datetime
 
 ## QUESTION
 
@@ -116,12 +117,11 @@ class TopicWithQuestionResponseGet(TopicBase):
 # LOGS
 
 class ReviewSessionRequest(BaseModel):
-    
-    # These match your hybrid_property names exactly.
-    # Pydantic will accept ISO strings and your SQLAlchemy 
-    # setter will convert them to datetime objects automatically.
-    start_review: str 
-    end_review: str
+    topic_id:int
+
+    # handles iso date string
+    start_review: datetime 
+    end_review: datetime
 
     # Snapshot stats
     graduated_cards: int = 0
@@ -131,7 +131,23 @@ class ReviewSessionRequest(BaseModel):
 
 class ReviewSessionResponse(ReviewSessionRequest):
     id: int
-    duration_minutes: float
+    topic_id: int
+
+    @computed_field
+    def duration_minutes(self) -> float:
+        if self.start_review and self.end_review:
+            delta = self.end_review - self.start_review
+            return round(delta.total_seconds() / 60, 2)
+        return 0.0
+
     
     # Pydantic v2 uses model_config instead of class Config
     model_config = ConfigDict(from_attributes=True)    
+
+# STATISTICS
+
+class DailyStatsResponse(BaseModel):
+    total_topic_reviews_today: int
+    total_graduated_cards_today: int
+    total_study_time_minutes_today: int
+    streak_days: int
