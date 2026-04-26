@@ -1,5 +1,3 @@
-"""
-
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from app.ml import generate_qa
@@ -27,4 +25,3 @@ async def generate_stream(windows: list[str]):
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
 
-"""

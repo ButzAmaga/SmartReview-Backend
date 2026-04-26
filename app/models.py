@@ -93,6 +93,7 @@ class ReviewSession(Base):
     learning_cards: Mapped[int] = mapped_column(Integer, default=0)
     relearning_cards: Mapped[int] = mapped_column(Integer, default=0)
     new_cards: Mapped[int] = mapped_column(Integer, default=0)
+    review_cards: Mapped[int] = mapped_column(Integer, default=0)
 
     @property
     def duration_minutes(self) -> float:
