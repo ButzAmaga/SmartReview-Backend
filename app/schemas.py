@@ -1,6 +1,6 @@
 from pydantic import BaseModel, model_validator,  Field, ConfigDict, computed_field
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date
 
 ## QUESTION
 
@@ -151,3 +151,16 @@ class DailyStatsResponse(BaseModel):
     total_graduated_cards_today: int
     total_study_time_minutes_today: int
     streak_days: int
+
+class DailyStatsResponse2(BaseModel):
+    topic_id: int
+    topic_name: str
+    total_duration_minutes: float   # sum of (end_review - start_review) in seconds
+    total_graduated_cards: int
+
+    model_config = ConfigDict(from_attributes=True)  
+
+
+class DailyReviewResponse(BaseModel):
+    date: date
+    summaries: List[DailyStatsResponse2]
