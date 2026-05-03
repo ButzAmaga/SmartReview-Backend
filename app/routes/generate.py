@@ -160,29 +160,35 @@ def process_elements_to_windows(elements) -> list[str]:
 # ─────────────────────────────────────────
 # ROUTES
 # ─────────────────────────────────────────
-
 @router.post("/qa/docx")
 async def qa_from_docx(file: UploadFile = File(...)):
     if not file.filename.endswith(".docx"):
         raise HTTPException(status_code=400, detail="Only .docx files are supported.")
 
     async def event_generator():
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
-            tmp.write(await file.read())
-            tmp_path = tmp.name
-
+        tmp_path = None
         try:
+            # Read and write inside the generator so streaming starts immediately
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+                contents = await file.read()
+                tmp.write(contents)
+                tmp_path = tmp.name
+
             elements = partition_docx(filename=tmp_path)
             windows = process_elements_to_windows(elements)
 
             for window in windows:
-                print(window)
                 generated_qa = generate_qa(window)
                 obj = parse_line(generated_qa)
                 if obj:
                     yield json.dumps(obj) + "\n"
+
+        except Exception as e:
+            yield json.dumps({"error": str(e)}) + "\n"
+
         finally:
-            os.unlink(tmp_path)
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
@@ -193,11 +199,13 @@ async def qa_from_txt(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Only .txt files are supported.")
 
     async def event_generator():
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp:
-            tmp.write(await file.read())
-            tmp_path = tmp.name
-
+        tmp_path = None
         try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp:
+                contents = await file.read()
+                tmp.write(contents)
+                tmp_path = tmp.name
+
             elements = partition_text(filename=tmp_path)
             windows = process_elements_to_windows(elements)
 
@@ -206,7 +214,12 @@ async def qa_from_txt(file: UploadFile = File(...)):
                 obj = parse_line(generated_qa)
                 if obj:
                     yield json.dumps(obj) + "\n"
+
+        except Exception as e:
+            yield json.dumps({"error": str(e)}) + "\n"
+
         finally:
-            os.unlink(tmp_path)
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
