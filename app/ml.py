@@ -63,6 +63,11 @@ def generate_qa(input_text):
             max_new_tokens=512,
             #num_beams=2, # You can adjust this for more diverse or precise outputs
             #do_sample=True, # Set to True for sampling, False for greedy decoding
+            #num_return_sequences=3,  # Generates 3 different sequences
+            # N-Gram Blocking: Prevents any sequence of 3 words from appearing twice
+            #no_repeat_ngram_size=3, 
+            # Repetition Penalty: Penalizes tokens that have already appeared (1.0 is neutral)
+            # repetition_penalty=1.2, 
             #temperature=0.7, # Adjust for creativity
             #top_k=50, # Limit to top k tokens
             #top_p=0.95 # Nucleus sampling
@@ -75,3 +80,47 @@ def generate_qa(input_text):
     return decoded_output
 
 
+def generate_qa_batch_t5(input_texts):
+    # 1. T5 uses right padding by default, which is standard for its encoder
+    ml_models["tokenizer"].padding_side = "right" 
+
+    prompts = []
+
+    for input_text in input_texts:
+        prompt = (
+            "Task: Extract a factual question and a concise answer from the provided text.\n"
+            "Format: Q: <QUESTION> A: <ANSWER>\n\n"
+            "Example:\n"
+            "Text: The Eiffel Tower was completed in 1889 and is located in Paris.\n"
+            "Q: In what year was the Eiffel Tower completed?\n"
+            "A: 1889\n\n"
+            f"Text:{input_text}\nQ:"
+        )
+        prompts.append(prompt)
+
+
+    # 3. Tokenize with padding and attention masks
+    inputs = ml_models["tokenizer"](
+        prompts,
+        padding=True,
+        truncation=True,
+        return_tensors="pt"
+    ).to(ml_models["model"].device)
+
+    # 4. Generate
+    with torch.no_grad():
+        outputs = ml_models["model"].generate(
+            **inputs,
+            max_new_tokens=512,
+            no_repeat_ngram_size=3,
+            repetition_penalty=1.2,
+            do_sample=True, # Set to True for sampling, False for greedy decoding
+            num_return_sequences=3,  # Generates 3 different sequences
+            
+            # T5 often benefits from these for factual tasks
+            length_penalty=1.0, 
+            
+        )
+
+    # 5. Decode
+    return ml_models["tokenizer"].batch_decode(outputs, skip_special_tokens=True)
