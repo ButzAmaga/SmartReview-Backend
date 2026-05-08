@@ -61,8 +61,8 @@ def generate_qa(input_text):
         outputs = ml_models["model"].generate(
             **inputs,
             max_new_tokens=512,
-            #num_beams=2, # You can adjust this for more diverse or precise outputs
-            #do_sample=True, # Set to True for sampling, False for greedy decoding
+            num_beams=3, # You can adjust this for more diverse or precise outputs
+            do_sample=True, # Set to True for sampling, False for greedy decoding
             #num_return_sequences=3,  # Generates 3 different sequences
             # N-Gram Blocking: Prevents any sequence of 3 words from appearing twice
             #no_repeat_ngram_size=3, 
@@ -75,6 +75,51 @@ def generate_qa(input_text):
 
     # Decode the generated tokens
     decoded_output = ml_models["tokenizer"].decode(outputs[0], skip_special_tokens=True)
+
+
+    return decoded_output
+
+def generate_qa_sequences(input_text):
+    # Preprocess the input text similar to how the training data was structured
+    prompt = (
+        "Task: Extract a factual question and a concise answer from the provided text.\n"
+        "Format: Q: <QUESTION> A: <ANSWER>\n\n"
+        "Example:\n"
+        "Text: The Eiffel Tower was completed in 1889 and is located in Paris.\n"
+        "Q: In what year was the Eiffel Tower completed?\n"
+        "A: 1889\n\n"
+        f"Text:{input_text}\nQ:"
+    )
+
+    # Tokenize the input
+    inputs = ml_models["tokenizer"](
+        prompt,
+        truncation=True,
+        return_tensors="pt"
+    )
+
+    # Move each tensor to model.device
+    inputs = {k: v.to(ml_models["model"].device) for k, v in inputs.items()}
+
+    # Generate output using the fine-tuned model
+    with torch.no_grad():
+        outputs = ml_models["model"].generate(
+            **inputs,
+            max_new_tokens=512,
+            #num_beams=2, # You can adjust this for more diverse or precise outputs
+            do_sample=True, # Set to True for sampling, False for greedy decoding
+            num_return_sequences=3,  # Generates 3 different sequences
+            # N-Gram Blocking: Prevents any sequence of 3 words from appearing twice
+            no_repeat_ngram_size=3, 
+            # Repetition Penalty: Penalizes tokens that have already appeared (1.0 is neutral)
+            repetition_penalty=1.2, 
+            #temperature=0.7, # Adjust for creativity
+            #top_k=50, # Limit to top k tokens
+            #top_p=0.95 # Nucleus sampling
+        )
+
+    # Decode the generated tokens
+    decoded_output = ml_models["tokenizer"].batch_decode(outputs, skip_special_tokens=True)
 
 
     return decoded_output
@@ -113,13 +158,12 @@ def generate_qa_batch_t5(input_texts):
             **inputs,
             max_new_tokens=512,
             no_repeat_ngram_size=3,
-            repetition_penalty=1.2,
+            repetition_penalty=1.5,
             do_sample=True, # Set to True for sampling, False for greedy decoding
-            num_return_sequences=3,  # Generates 3 different sequences
-            
+            num_return_sequences=2,  # Generates 3 different sequences
+            temperature=0.4, # add variety to words
             # T5 often benefits from these for factual tasks
             length_penalty=1.0, 
-            
         )
 
     # 5. Decode

@@ -3,7 +3,7 @@ from io import StringIO
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from app.ml import generate_qa
+from app.ml import generate_qa, generate_qa_batch_t5, generate_qa_sequences
 import json
 from app.utils import parse_line
 from fastapi import APIRouter, UploadFile, File, HTTPException
@@ -62,10 +62,13 @@ def group_elements(elements) -> list[Document]:
 
         elif el.category == "ListItem":
             # Append each list item as its own Document
+
             grouped_docs.append(Document(
                 page_content=el.text,
                 metadata={"category": "List"}
             ))
+
+            
             # Still accumulate for Title-List-Group summary
             if current_title:
                 buffer_content.append(el.text)
@@ -92,7 +95,7 @@ def group_elements(elements) -> list[Document]:
                         rest = row_values[1:]          # Remaining = column + value pairs
 
                         for col, val in rest:
-                            sentence = f"The {row_label} of {col} is \"{val}\"."
+                            sentence = f"The '{row_label} {col}' value is '{val}'."
                             grouped_docs.append(Document(
                                 page_content=sentence,
                                 metadata={"category": "NarrativeText"}
@@ -128,15 +131,15 @@ def group_elements(elements) -> list[Document]:
 
 def split_documents(grouped_docs: list[Document]) -> list[Document]:
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800,
-        chunk_overlap=100,
-        separators=["\n\n", "\n", ". ", " ", ""]
+        chunk_size=200, # 800
+        chunk_overlap=0, # 100
+        separators=["\n\n", "\n", "."]
     )
 
     final_chunks = []
 
     for doc in grouped_docs:
-        if doc.metadata["category"] == "NarrativeText" and len(doc.page_content) > 800:
+        if doc.metadata["category"] == "NarrativeText" and len(doc.page_content) > 200:
             # Only split long narrative texts
             splits = text_splitter.split_documents([doc])
             final_chunks.extend(splits)
@@ -177,11 +180,28 @@ async def qa_from_docx(file: UploadFile = File(...)):
             elements = partition_docx(filename=tmp_path)
             windows = process_elements_to_windows(elements)
 
+            """
+            chunk_size = 10
+
+            for i in range(0, len(windows), chunk_size):
+                window_chunk = windows[i:i + chunk_size]
+
+                generated_qa = generate_qa_batch_t5(window_chunk)
+
+                for qa in generated_qa:
+                    print(qa)
+                    obj = parse_line(qa)
+                    if obj:
+                        yield json.dumps(obj) + "\n"
+            """
+
+
             for window in windows:
                 generated_qa = generate_qa(window)
                 obj = parse_line(generated_qa)
                 if obj:
                     yield json.dumps(obj) + "\n"
+
 
         except Exception as e:
             yield json.dumps({"error": str(e)}) + "\n"
@@ -208,12 +228,15 @@ async def qa_from_txt(file: UploadFile = File(...)):
 
             elements = partition_text(filename=tmp_path)
             windows = process_elements_to_windows(elements)
-
             for window in windows:
-                generated_qa = generate_qa(window)
-                obj = parse_line(generated_qa)
-                if obj:
-                    yield json.dumps(obj) + "\n"
+                generated_qa = generate_qa_sequences(window)
+
+                for qa in generated_qa:
+                    print(qa)
+                    obj = parse_line(qa)
+
+                    if obj:
+                        yield json.dumps(obj) + "\n"
 
         except Exception as e:
             yield json.dumps({"error": str(e)}) + "\n"
