@@ -62,7 +62,7 @@ def generate_qa(input_text):
             **inputs,
             max_new_tokens=512,
             num_beams=3, # You can adjust this for more diverse or precise outputs
-            do_sample=True, # Set to True for sampling, False for greedy decoding
+            #do_sample=True, # Set to True for sampling, False for greedy decoding
             #num_return_sequences=3,  # Generates 3 different sequences
             # N-Gram Blocking: Prevents any sequence of 3 words from appearing twice
             #no_repeat_ngram_size=3, 

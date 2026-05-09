@@ -13,6 +13,9 @@ from unstructured.partition.text import partition_text
 import tempfile, os, json
 import pandas as pd
 from langchain_core.documents import Document
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
 
 router = APIRouter(
     prefix="/generate",
@@ -160,9 +163,100 @@ def process_elements_to_windows(elements) -> list[str]:
     return [doc.page_content for doc in final_chunks if doc.page_content.strip()]
 
 
+
+async def event_generator_2():
+    queue = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+
+    # Define the heavy work in a sync function
+    def produce_qa():
+        for window in windows:
+            res = generate_qa(window)
+            loop.call_soon_threadsafe(queue.put_nowait, res)
+        loop.call_soon_threadsafe(queue.put_nowait, None) # Sentinel to stop
+
+    # Run producer in a thread pool
+    worker = loop.run_in_executor(ThreadPoolExecutor(), produce_qa)
+
+    while True:
+        try:
+            # Wait for 1 second for a result
+            item = await asyncio.wait_for(queue.get(), timeout=1.0)
+            if item is None: break
+            
+            obj = parse_line(item)
+            if obj:
+                yield json.dumps(obj) + "\n"
+        except asyncio.TimeoutError:
+            # This is the "waiting" state - yield a heartbeat
+            yield "\n" 
+
+    await worker
+
 # ─────────────────────────────────────────
 # ROUTES
 # ─────────────────────────────────────────
+@router.post("/qa/docx/v1")
+async def qa_from_docx_v1(file: UploadFile = File(...)):
+    if not file.filename.endswith(".docx"):
+        raise HTTPException(status_code=400, detail="Only .docx files are supported.")
+
+    async def event_generator():
+        tmp_path = None
+        try:
+            # Read and write inside the generator so streaming starts immediately
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+                contents = await file.read()
+                tmp.write(contents)
+                tmp_path = tmp.name
+
+            elements = partition_docx(filename=tmp_path)
+            windows = process_elements_to_windows(elements)
+            
+            queue = asyncio.Queue()
+            loop = asyncio.get_event_loop()
+
+            # Define the heavy work in a sync function
+            def produce_qa(windows):
+                for window in windows:
+                    res = generate_qa(window)
+                    loop.call_soon_threadsafe(queue.put_nowait, res)
+
+                loop.call_soon_threadsafe(queue.put_nowait, None) # Sentinel to stop
+
+            # Run producer in a thread pool
+            worker = loop.run_in_executor(ThreadPoolExecutor(), produce_qa, windows)
+
+            while True:
+                try:
+                    # Wait for 1 second for a result
+                    item = await asyncio.wait_for(queue.get(), timeout=1.0)
+                    if item is None: break
+                    
+                    obj = parse_line(item)
+                    if obj:
+                        yield json.dumps(obj) + "\n"
+                        
+                except asyncio.TimeoutError:
+                    # This is the "waiting" state - yield a heartbeat
+                    yield "\n" 
+
+            await worker
+
+        except Exception as e:
+            yield json.dumps({"error": str(e)}) + "\n"
+
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
+
+
+
+
+
+
 @router.post("/qa/docx")
 async def qa_from_docx(file: UploadFile = File(...)):
     if not file.filename.endswith(".docx"):
@@ -211,6 +305,8 @@ async def qa_from_docx(file: UploadFile = File(...)):
                 os.unlink(tmp_path)
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
+
+
 
 
 @router.post("/qa/txt")
