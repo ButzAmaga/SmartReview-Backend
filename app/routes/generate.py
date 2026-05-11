@@ -3,7 +3,7 @@ from io import StringIO
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from app.ml import generate_qa, generate_qa_batch_t5, generate_qa_sequences
+from app.ml import generate_qa, generate_qa_batch_t5, generate_qa_batch_t5_v2, generate_qa_sequences
 import json
 from app.utils import parse_line
 from fastapi import APIRouter, UploadFile, File, HTTPException
@@ -212,14 +212,22 @@ async def qa_from_docx_v1(file: UploadFile = File(...)):
 
             elements = partition_docx(filename=tmp_path)
             windows = process_elements_to_windows(elements)
+
+            
             
             queue = asyncio.Queue()
             loop = asyncio.get_event_loop()
 
             # Define the heavy work in a sync function
             def produce_qa(windows):
-                for window in windows:
-                    res = generate_qa(window)
+                chunk_size = 5
+
+                for i in range(0, len(windows), chunk_size):
+                    window_chunk = windows[i:i + chunk_size]
+
+                    
+                    res = generate_qa_batch_t5_v2(window_chunk)
+                   
                     loop.call_soon_threadsafe(queue.put_nowait, res)
 
                 loop.call_soon_threadsafe(queue.put_nowait, None) # Sentinel to stop
@@ -230,13 +238,14 @@ async def qa_from_docx_v1(file: UploadFile = File(...)):
             while True:
                 try:
                     # Wait for 1 second for a result
-                    item = await asyncio.wait_for(queue.get(), timeout=1.0)
-                    if item is None: break
+                    items = await asyncio.wait_for(queue.get(), timeout=1.0)
+                    if items is None: break
                     
-                    obj = parse_line(item)
-                    if obj:
-                        yield json.dumps(obj) + "\n"
-                        
+                    for item in items:
+                        obj = parse_line(item)
+                        if obj:
+                            yield json.dumps(obj) + "\n"
+
                 except asyncio.TimeoutError:
                     # This is the "waiting" state - yield a heartbeat
                     yield "\n" 
@@ -253,6 +262,67 @@ async def qa_from_docx_v1(file: UploadFile = File(...)):
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
 
+
+@router.post("/qa/docx/v2")
+async def qa_from_docx_v2(file: UploadFile = File(...)):
+    if not file.filename.endswith(".docx"):
+        raise HTTPException(status_code=400, detail="Only .docx files are supported.")
+
+    async def event_generator():
+        tmp_path = None
+        try:
+            # Read and write inside the generator so streaming starts immediately
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+                contents = await file.read()
+                tmp.write(contents)
+                tmp_path = tmp.name
+
+            elements = partition_docx(filename=tmp_path)
+            windows = process_elements_to_windows(elements)
+            
+            queue = asyncio.Queue()
+            loop = asyncio.get_event_loop()
+
+            # Define the heavy work in a sync function
+            def produce_qa(windows):
+
+                for window in windows:
+
+                    res = generate_qa_sequences(window)
+
+                    loop.call_soon_threadsafe(queue.put_nowait, res)
+
+                loop.call_soon_threadsafe(queue.put_nowait, None) # Sentinel to stop
+
+            # Run producer in a thread pool
+            worker = loop.run_in_executor(ThreadPoolExecutor(), produce_qa, windows)
+
+            while True:
+                try:
+                    # Wait for 1 second for a result
+                    items = await asyncio.wait_for(queue.get(), timeout=1.0)
+                    if items is None: break
+                    
+                    for item in items:
+                        obj = parse_line(item)
+                        print(obj)
+                        if obj:
+                            yield json.dumps(obj) + "\n"
+
+                except asyncio.TimeoutError:
+                    # This is the "waiting" state - yield a heartbeat
+                    yield "\n" 
+
+            await worker
+
+        except Exception as e:
+            yield json.dumps({"error": str(e)}) + "\n"
+
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
 
 
@@ -324,15 +394,43 @@ async def qa_from_txt(file: UploadFile = File(...)):
 
             elements = partition_text(filename=tmp_path)
             windows = process_elements_to_windows(elements)
-            for window in windows:
-                generated_qa = generate_qa_sequences(window)
 
-                for qa in generated_qa:
-                    print(qa)
-                    obj = parse_line(qa)
+            queue = asyncio.Queue()
+            loop = asyncio.get_event_loop()
 
-                    if obj:
-                        yield json.dumps(obj) + "\n"
+            # Define the heavy work in a sync function
+            def produce_qa(windows):
+                chunk_size = 5
+
+                for i in range(0, len(windows), chunk_size):
+                    window_chunk = windows[i:i + chunk_size]
+
+                    res = generate_qa_batch_t5_v2(window_chunk)
+                   
+                    loop.call_soon_threadsafe(queue.put_nowait, res)
+
+                loop.call_soon_threadsafe(queue.put_nowait, None) # Sentinel to stop
+
+            # Run producer in a thread pool
+            worker = loop.run_in_executor(ThreadPoolExecutor(), produce_qa, windows)
+
+            while True:
+                try:
+                    # Wait for 1 second for a result
+                    items = await asyncio.wait_for(queue.get(), timeout=1.0)
+                    if items is None: break
+                    
+                    for item in items:
+                        obj = parse_line(item)
+                        print(obj)
+                        if obj:
+                            yield json.dumps(obj) + "\n"
+
+                except asyncio.TimeoutError:
+                    # This is the "waiting" state - yield a heartbeat
+                    yield "\n" 
+
+            await worker
 
         except Exception as e:
             yield json.dumps({"error": str(e)}) + "\n"

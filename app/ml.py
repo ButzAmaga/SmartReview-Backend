@@ -8,8 +8,8 @@ import torch
 
 # Dictionary to hold the model and tokenizer
 ml_models = {}
-model_path = '../../flan t5 base'
-lora_path = '../../Flan T5 Model/flan_t5_lora_base'
+model_path = '../../flan t5 large'
+lora_path = '../../Flan T5 Model/flan_t5_lora_large'
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -105,7 +105,7 @@ def generate_qa_sequences(input_text):
     with torch.no_grad():
         outputs = ml_models["model"].generate(
             **inputs,
-            max_new_tokens=512,
+            max_new_tokens=120,
             #num_beams=2, # You can adjust this for more diverse or precise outputs
             do_sample=True, # Set to True for sampling, False for greedy decoding
             num_return_sequences=3,  # Generates 3 different sequences
@@ -157,13 +157,56 @@ def generate_qa_batch_t5(input_texts):
         outputs = ml_models["model"].generate(
             **inputs,
             max_new_tokens=512,
-            no_repeat_ngram_size=3,
-            repetition_penalty=1.5,
-            do_sample=True, # Set to True for sampling, False for greedy decoding
-            num_return_sequences=2,  # Generates 3 different sequences
-            temperature=0.4, # add variety to words
+            num_beams=3 # more diverse selection of output
+            # no_repeat_ngram_size=3,
+            # repetition_penalty=1.5,
+            # do_sample=True, # Set to True for sampling, False for greedy decoding
+            # num_return_sequences=2,  # Generates 3 different sequences
+            # temperature=0.4, # add variety to words
             # T5 often benefits from these for factual tasks
-            length_penalty=1.0, 
+            # length_penalty=1.0, 
+        )
+
+    # 5. Decode
+    return ml_models["tokenizer"].batch_decode(outputs, skip_special_tokens=True)
+
+def generate_qa_batch_t5_v2(input_texts):
+    # 1. T5 uses right padding by default, which is standard for its encoder
+    ml_models["tokenizer"].padding_side = "right" 
+
+    
+    # 1. Create a list of prompts for every item in your array
+    prompts = [
+        (
+        f"Generate QA pair based on context. Follow the format Q: [question] A: [answer].\n\n"
+        "Context: The old attic was silent until Maya heard something shift behind a stack of dusty crates.\n"
+        "Q: What was silent until Maya heard something? A: old attic.\n\n"
+        f"Context: {text}\nQ:"
+        )
+        for text in input_texts
+    ]
+
+    # 3. Tokenize with padding and attention masks
+    inputs = ml_models["tokenizer"](
+        prompts,
+        padding=True,
+        truncation=True,
+        return_tensors="pt"
+    ).to(ml_models["model"].device)
+
+    # 4. Generate
+    with torch.no_grad():
+        outputs = ml_models["model"].generate(
+            **inputs,
+            max_new_tokens=512,
+            # num_beams=3 # more diverse selection of output
+            # no_repeat_ngram_size=3,
+            # repetition_penalty=1.5,
+            # do_sample=True, # Set to True for sampling, False for greedy decoding
+            # num_return_sequences=2,  # Generates 3 different sequences
+            # temperature=0.4, # add variety to words
+            # T5 often benefits from these for factual tasks
+            # length_penalty=1.0, 
         )
 
     # 5. Decode
