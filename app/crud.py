@@ -124,6 +124,7 @@ def createtopicQuestion(db: Session, item: schemas.TopicQuestionBase):
         models.QAItem(
             question=qa.question,
             answer=qa.answer,
+            context=qa.context,
             topic_id=db_topic.id
         )
         for qa in item.qa

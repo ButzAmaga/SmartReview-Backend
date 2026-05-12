@@ -8,6 +8,7 @@ from datetime import datetime, date
 class QABase(BaseModel):
     question: str
     answer: str
+    context: Optional[str] = "no context"
 
 # Create
 
@@ -68,6 +69,7 @@ class TopicQuestionBase(BaseModel):
     topic_name: Optional[str] = None
     topic_id: Optional[int] = None
     qa: List[QABase]
+    
 
     @model_validator(mode="after")
     def check_topic(cls, values):

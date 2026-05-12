@@ -53,6 +53,8 @@ class QAItem(Base):
     interval = Column(Integer, nullable=False, default=0)
     phase = Column(String, nullable=False, default="new") 
 
+    context = Column(String, nullable=True, default="no context")
+
     topic = relationship("Topic", back_populates="qa_items")
 
 
