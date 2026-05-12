@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.ml import generate_qa, generate_qa_batch_t5, generate_qa_batch_t5_v2, generate_qa_sequences
 import json
-from app.utils import parse_line
+from app.utils import parse_line, parse_line_w_context
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
 from unstructured.partition.docx import partition_docx
@@ -44,6 +44,8 @@ async def generate_stream(windows: list[str]):
 # GROUPING LOGIC
 # ─────────────────────────────────────────
 
+SHORT_ITEM_THRESHOLD = 40  # characters — tune this to your data
+
 def group_elements(elements) -> list[Document]:
     grouped_docs = []
     buffer_content = []
@@ -53,81 +55,135 @@ def group_elements(elements) -> list[Document]:
         if el.category == "Title":
             # Flush any pending title-list group before starting a new title
             if current_title and buffer_content:
-                full_text = f"The number of {current_title} examples is \"{len(buffer_content)}\"."
-                grouped_docs.append(Document(
-                    page_content=full_text,
-                    metadata={"category": "Title-List-Group"}
-                ))
+                grouped_docs.extend(
+                    _flush_title_list_group(current_title, buffer_content)
+                )
 
             # Start new title, reset buffer
             current_title = el.text
             buffer_content = []
 
         elif el.category == "ListItem":
-            # Append each list item as its own Document
-
-            grouped_docs.append(Document(
-                page_content=el.text,
-                metadata={"category": "List"}
-            ))
-
-            
-            # Still accumulate for Title-List-Group summary
             if current_title:
                 buffer_content.append(el.text)
+            else:
+                # No title context — just emit as a plain List doc
+                grouped_docs.append(Document(
+                    page_content=el.text,
+                    metadata={"category": "List"}
+                ))
 
         else:
-            # Flush title-list buffer if it has accumulated list items
+            # Flush only if the title actually accumulated list items
+            # If current_title exists but buffer is empty, the title had no list — discard it
             if current_title and buffer_content:
-                full_text = f"The number of {current_title} examples is \"{len(buffer_content)}\""
-                grouped_docs.append(Document(
-                    page_content=full_text,
-                    metadata={"category": "Title-List-Group"}
-                ))
-                buffer_content = []
+                grouped_docs.extend(
+                    _flush_title_list_group(current_title, buffer_content)
+                )
+            # Either way, reset title state — title with no list items is dropped
+            buffer_content = []
+            current_title = ""
 
             if el.category == "Table":
-                # Convert each table cell into its own narrative Document
                 try:
                     df = pd.read_html(StringIO(el.metadata.text_as_html), header=0)[0]
-                    
 
-                    for _, row in df.iterrows():
-                        row_values = list(row.items())
-                        row_label = row_values[0][1]  # First column = row label
-                        rest = row_values[1:]          # Remaining = column + value pairs
-
-                        for col, val in rest:
-                            sentence = f"The '{row_label} {col}' value is '{val}'."
+                    if is_matrix_table(df):
+                        for _, row in df.iterrows():
+                            row_values = list(row.items())
+                            row_label = row_values[0][1]
+                            rest = row_values[1:]
+                            for col, val in rest:
+                                sentence = f"The '{row_label} {col}' value is '{val}'."
+                                grouped_docs.append(Document(
+                                    page_content=sentence,
+                                    metadata={"category": "NarrativeText"}
+                                ))
+                    else:
+                        headers_str = " - ".join(str(col) for col in df.columns)
+                        for row_idx, (_, row) in enumerate(df.iterrows(), start=1):
+                            values_str = " - ".join(str(v) for v in row.values)
+                            sentence = f"Row {row_idx} [{headers_str}] value is '{values_str}'."
                             grouped_docs.append(Document(
                                 page_content=sentence,
                                 metadata={"category": "NarrativeText"}
                             ))
+
                 except Exception:
-                    # Fallback: append raw table text if parsing fails
                     grouped_docs.append(Document(
                         page_content=el.text,
                         metadata={"category": "Table"}
                     ))
-
             else:
-                # NarrativeText and everything else — raw text, no prefix
                 grouped_docs.append(Document(
                     page_content=el.text,
                     metadata={"category": el.category}
                 ))
 
-    # Flush any remaining title-list group at end of loop
+    # Flush any remaining — only if title had list items
     if current_title and buffer_content:
-        full_text = f"The number of {current_title} examples is \"{len(buffer_content)}\""
-        grouped_docs.append(Document(
-            page_content=full_text,
-            metadata={"category": "Title-List-Group"}
-        ))
+        grouped_docs.extend(
+            _flush_title_list_group(current_title, buffer_content)
+        )
 
     return grouped_docs
 
+def _flush_title_list_group(title: str, items: list[str]) -> list[Document]:
+    """
+    Decides how to render a title + its list items based on item length.
 
+    Long items  → count summary doc + one doc per item
+    Short items → single collapsed sentence
+    """
+    docs = []
+    is_short_list = all(len(item) <= SHORT_ITEM_THRESHOLD for item in items)
+
+    if is_short_list:
+        # Collapsed: "X value are 'a, b, c'"
+        joined = ", ".join(items)
+        sentence = f"{title} value are '{joined}'."
+        docs.append(Document(
+            page_content=sentence,
+            metadata={"category": "Title-List-Group"}
+        ))
+    else:
+        # Count summary
+        docs.append(Document(
+            page_content=f"The number of content in {title} is {len(items)}.",
+            metadata={"category": "Title-List-Group"}
+        ))
+        # Individual items
+        for item in items:
+            docs.append(Document(
+                page_content=item,
+                metadata={"category": "List"}
+            ))
+
+    return docs
+
+def is_matrix_table(df: pd.DataFrame) -> bool:
+    if df.shape[1] < 2:
+        return False
+    first_col = df.iloc[:, 0]
+    if first_col.dtype != object:
+        return False
+    if first_col.nunique() != len(first_col):
+        return False
+
+    def is_numeric_string(val):
+        try:
+            float(str(val).replace(",", ""))
+            return True
+        except ValueError:
+            return False
+
+    if first_col.apply(is_numeric_string).any():
+        return False
+    rest = df.iloc[:, 1:]
+    numeric_cols = rest.apply(pd.to_numeric, errors="coerce").notna().all()
+    if numeric_cols.sum() < len(rest.columns) / 2:
+        return False
+    return True
 # ─────────────────────────────────────────
 # SPLITTING LOGIC
 # ─────────────────────────────────────────
@@ -279,16 +335,27 @@ async def qa_from_docx_v2(file: UploadFile = File(...)):
 
             elements = partition_docx(filename=tmp_path)
             windows = process_elements_to_windows(elements)
+
+            
             
             queue = asyncio.Queue()
             loop = asyncio.get_event_loop()
 
             # Define the heavy work in a sync function
             def produce_qa(windows):
+                chunk_size = 5
 
-                for window in windows:
+                for i in range(0, len(windows), chunk_size):
+                    window_chunk = windows[i:i + chunk_size]
+                    raw_results = generate_qa_batch_t5_v2(window_chunk)
 
-                    res = generate_qa_sequences(window)
+                    # Combine the Q:A string with the C: context string
+                    res = []
+                    for raw, window in zip(raw_results, window_chunk):
+                        if raw:
+                            # Append the context marker and the window content
+                            combined = f"{raw.strip()} C: {window.strip()}"
+                            res.append(combined)
 
                     loop.call_soon_threadsafe(queue.put_nowait, res)
 
@@ -304,8 +371,7 @@ async def qa_from_docx_v2(file: UploadFile = File(...)):
                     if items is None: break
                     
                     for item in items:
-                        obj = parse_line(item)
-                        print(obj)
+                        obj = parse_line_w_context(item)
                         if obj:
                             yield json.dumps(obj) + "\n"
 
@@ -324,57 +390,6 @@ async def qa_from_docx_v2(file: UploadFile = File(...)):
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
-
-
-
-@router.post("/qa/docx")
-async def qa_from_docx(file: UploadFile = File(...)):
-    if not file.filename.endswith(".docx"):
-        raise HTTPException(status_code=400, detail="Only .docx files are supported.")
-
-    async def event_generator():
-        tmp_path = None
-        try:
-            # Read and write inside the generator so streaming starts immediately
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
-                contents = await file.read()
-                tmp.write(contents)
-                tmp_path = tmp.name
-
-            elements = partition_docx(filename=tmp_path)
-            windows = process_elements_to_windows(elements)
-
-            """
-            chunk_size = 10
-
-            for i in range(0, len(windows), chunk_size):
-                window_chunk = windows[i:i + chunk_size]
-
-                generated_qa = generate_qa_batch_t5(window_chunk)
-
-                for qa in generated_qa:
-                    print(qa)
-                    obj = parse_line(qa)
-                    if obj:
-                        yield json.dumps(obj) + "\n"
-            """
-
-
-            for window in windows:
-                generated_qa = generate_qa(window)
-                obj = parse_line(generated_qa)
-                if obj:
-                    yield json.dumps(obj) + "\n"
-
-
-        except Exception as e:
-            yield json.dumps({"error": str(e)}) + "\n"
-
-        finally:
-            if tmp_path and os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-
-    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
 
 

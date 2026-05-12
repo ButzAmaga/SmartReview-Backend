@@ -16,3 +16,24 @@ def parse_line(line: str) -> dict | None:
     answer = parts[1].strip()
     return {"question": question, "answer": answer}
 
+def parse_line_w_context(line: str) -> dict | None:
+    # Check for all required markers
+    if not all(x in line for x in ["Q:", "A:", "C:"]):
+        return None
+    
+    # Extract question: between Q: and A:
+    q_part = line.split("Q:", 1)[1].split("A:", 1)
+    question = q_part[0].strip()
+    
+    # Extract answer: between A: and C:
+    a_part = q_part[1].split("C:", 1)
+    answer = a_part[0].strip()
+    
+    # Extract context: everything after C:
+    context = a_part[1].strip()
+    
+    return {
+        "question": question, 
+        "answer": answer, 
+        "context": context
+    }
