@@ -2,7 +2,7 @@
 from io import StringIO
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import NLTKTextSplitter, RecursiveCharacterTextSplitter, SpacyTextSplitter
 from app.ml import generate_qa, generate_qa_batch_t5, generate_qa_batch_t5_v2, generate_qa_sequences
 import json
 from app.utils import parse_line, parse_line_w_context
@@ -15,6 +15,9 @@ import pandas as pd
 from langchain_core.documents import Document
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+
+
+
 
 
 router = APIRouter(
@@ -46,13 +49,70 @@ async def generate_stream(windows: list[str]):
 
 SHORT_ITEM_THRESHOLD = 40  # characters — tune this to your data
 
+# ── Tunable knobs ────────────────────────────────────────────────────────────
+MIN_WORDS            = 5    # fewer words → likely a label, not a sentence
+TITLE_CASE_RATIO     = 0.7  # fraction of words starting uppercase → title-like
+SIGNAL_THRESHOLD     = 1    # how many signals must fire to drop the element
+                             # set to 2 for a more permissive filter
+
+TERMINAL_PUNCTUATION = frozenset(".!?")
+LEAD_IN_PUNCTUATION  = frozenset(":")
+
+
+def _has_terminal_punctuation(text: str) -> bool:
+    """Real sentences end with . ! or ?"""
+    return text.rstrip()[-1] in TERMINAL_PUNCTUATION if text.rstrip() else False
+
+
+def _is_low_word_count(text: str) -> bool:
+    """Very short spans are labels, page markers, or stub headers."""
+    return len(text.split()) <= MIN_WORDS
+
+
+def _is_title_cased(text: str) -> bool:
+    """
+    If most words start with a capital, the element looks like a heading.
+    Skips single-char words (a, I, etc.) to avoid false positives.
+    """
+    words = [w for w in text.split() if len(w) > 1]
+    if not words:
+        return False
+    capitalised = sum(1 for w in words if w[0].isupper())
+    return (capitalised / len(words)) >= TITLE_CASE_RATIO
+
+
+def _is_lead_in(text: str) -> bool:
+    """'The following includes:' — ends with colon, meaning content follows."""
+    return text.rstrip()[-1] in LEAD_IN_PUNCTUATION if text.rstrip() else False
+
+
+def _score_signals(text: str) -> int:
+    """Count how many structural signals fire."""
+    stripped = text.strip()
+    score = 0
+    if not _has_terminal_punctuation(stripped): score += 1
+    if _is_low_word_count(stripped):            score += 1
+    if _is_title_cased(stripped):               score += 1
+    if _is_lead_in(stripped):                   score += 1
+    return score
+
+
+def is_false_narrative(text: str) -> bool:
+    """
+    Returns True when a NarrativeText element is structurally
+    indistinguishable from a heading, page marker, or lead-in phrase.
+
+    No hardcoded word lists or regex — purely structural signals.
+    """
+    return _score_signals(text.strip()) >= SIGNAL_THRESHOLD
+
 def group_elements(elements) -> list[Document]:
     grouped_docs = []
     buffer_content = []
     current_title = ""
 
     for el in elements:
-        if el.category == "Title":
+        if el.category == "Title" or el.category == "Header":
             # Flush any pending title-list group before starting a new title
             if current_title and buffer_content:
                 grouped_docs.extend(
@@ -100,20 +160,36 @@ def group_elements(elements) -> list[Document]:
                                     metadata={"category": "NarrativeText"}
                                 ))
                     else:
-                        headers_str = " - ".join(str(col) for col in df.columns)
-                        for row_idx, (_, row) in enumerate(df.iterrows(), start=1):
-                            values_str = " - ".join(str(v) for v in row.values)
-                            sentence = f"Row {row_idx} [{headers_str}] value is '{values_str}'."
-                            grouped_docs.append(Document(
-                                page_content=sentence,
-                                metadata={"category": "NarrativeText"}
-                            ))
+                        headers = [str(col) for col in df.columns]
 
+                        for row_idx, (_, row) in enumerate(df.iterrows(), start=1):
+                            row_parts = [
+                                f"the {header} is {value}"
+                                for header, value in zip(headers, row.values)
+                            ]
+
+                            sentence = f"In row {row_idx} the data are, " + ", ".join(row_parts) + "."
+
+                            grouped_docs.append(
+                                Document(
+                                    page_content=sentence,
+                                    metadata={"category": "NarrativeText"}
+                                )
+                            )
+                '''
                 except Exception:
+                    
                     grouped_docs.append(Document(
                         page_content=el.text,
                         metadata={"category": "Table"}
                     ))
+                '''
+
+                # ── Was: append every NarrativeText unconditionally
+                # ── Now: skip elements that look like false narratives
+            if (el.category == "NarrativeText" or el.category == "UncategorizedText") and is_false_narrative(el.text):
+                pass   # silently drop page markers, lead-ins, stub headers
+
             else:
                 grouped_docs.append(Document(
                     page_content=el.text,
@@ -189,18 +265,22 @@ def is_matrix_table(df: pd.DataFrame) -> bool:
 # ─────────────────────────────────────────
 
 def split_documents(grouped_docs: list[Document]) -> list[Document]:
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=200, # 800
-        chunk_overlap=0, # 100
-        separators=["\n\n", "\n", "."]
+    text_splitter = SpacyTextSplitter(
+        pipeline="en_core_web_sm", # The model package we downloaded
+        chunk_size=300,             # Target character size optimized for QA pairs
+        chunk_overlap=0            # Set overlap if you want shared context between chunks
     )
 
     final_chunks = []
 
     for doc in grouped_docs:
-        if doc.metadata["category"] == "NarrativeText" and len(doc.page_content) > 200:
+        if doc.metadata["category"] == "NarrativeText" and len(doc.page_content) > 300:
             # Only split long narrative texts
             splits = text_splitter.split_documents([doc])
+
+
+            # filter out false narratives
+            # splits = [split for split in splits if not _is_low_word_count(split)]
             final_chunks.extend(splits)
         else:
             # Keep atomic docs as-is: List, Title-List-Group, table narratives
@@ -215,39 +295,11 @@ def split_documents(grouped_docs: list[Document]) -> list[Document]:
 
 def process_elements_to_windows(elements) -> list[str]:
     grouped_docs = group_elements(elements)
+    
     final_chunks = split_documents(grouped_docs)
-    return [doc.page_content for doc in final_chunks if doc.page_content.strip()]
+    return [doc.page_content for doc in final_chunks if doc.page_content.strip() and not _is_low_word_count(doc.page_content)]
 
 
-
-async def event_generator_2():
-    queue = asyncio.Queue()
-    loop = asyncio.get_event_loop()
-
-    # Define the heavy work in a sync function
-    def produce_qa():
-        for window in windows:
-            res = generate_qa(window)
-            loop.call_soon_threadsafe(queue.put_nowait, res)
-        loop.call_soon_threadsafe(queue.put_nowait, None) # Sentinel to stop
-
-    # Run producer in a thread pool
-    worker = loop.run_in_executor(ThreadPoolExecutor(), produce_qa)
-
-    while True:
-        try:
-            # Wait for 1 second for a result
-            item = await asyncio.wait_for(queue.get(), timeout=1.0)
-            if item is None: break
-            
-            obj = parse_line(item)
-            if obj:
-                yield json.dumps(obj) + "\n"
-        except asyncio.TimeoutError:
-            # This is the "waiting" state - yield a heartbeat
-            yield "\n" 
-
-    await worker
 
 # ─────────────────────────────────────────
 # ROUTES
@@ -391,9 +443,6 @@ async def qa_from_docx_v2(file: UploadFile = File(...)):
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
 
-
-
-
 @router.post("/qa/txt")
 async def qa_from_txt(file: UploadFile = File(...)):
     if not file.filename.endswith(".txt"):
@@ -419,10 +468,18 @@ async def qa_from_txt(file: UploadFile = File(...)):
 
                 for i in range(0, len(windows), chunk_size):
                     window_chunk = windows[i:i + chunk_size]
+                    raw_results = generate_qa_batch_t5_v2(window_chunk)
 
-                    res = generate_qa_batch_t5_v2(window_chunk)
-                   
+                    # Combine the Q:A string with the C: context string
+                    res = []
+                    for raw, window in zip(raw_results, window_chunk):
+                        if raw:
+                            # Append the context marker and the window content
+                            combined = f"{raw.strip()} C: {window.strip()}"
+                            res.append(combined)
+                    
                     loop.call_soon_threadsafe(queue.put_nowait, res)
+
 
                 loop.call_soon_threadsafe(queue.put_nowait, None) # Sentinel to stop
 
@@ -436,7 +493,7 @@ async def qa_from_txt(file: UploadFile = File(...)):
                     if items is None: break
                     
                     for item in items:
-                        obj = parse_line(item)
+                        obj = parse_line_w_context(item)
                         print(obj)
                         if obj:
                             yield json.dumps(obj) + "\n"
