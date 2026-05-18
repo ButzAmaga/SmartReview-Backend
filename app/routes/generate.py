@@ -176,14 +176,12 @@ def group_elements(elements) -> list[Document]:
                                     metadata={"category": "NarrativeText"}
                                 )
                             )
-                '''
                 except Exception:
                     
                     grouped_docs.append(Document(
                         page_content=el.text,
                         metadata={"category": "Table"}
                     ))
-                '''
 
                 # ── Was: append every NarrativeText unconditionally
                 # ── Now: skip elements that look like false narratives
