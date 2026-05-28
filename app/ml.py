@@ -8,8 +8,8 @@ import torch
 
 # Dictionary to hold the model and tokenizer
 ml_models = {}
-model_path = '../../flan t5 large'
-lora_path = '../../Flan T5 Model/flan_t5_lora_large'
+model_path = '../../flan t5 large' # point to the folder of flan t5 large files
+lora_path = '../../Flan T5 Model/flan_t5_lora_large' # poiint to the folder of trained lora
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
